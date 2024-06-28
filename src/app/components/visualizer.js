@@ -1,53 +1,95 @@
-'use client'
+"use client";
 
-import * as THREE from 'three';
-import { Suspense, useEffect, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { suspend } from 'suspend-react';
-import { AccumulativeShadows, RandomizedLight, Center, Environment, OrbitControls } from '@react-three/drei'
+import * as THREE from "three";
+import { Suspense, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { suspend } from "suspend-react";
+import {
+  Environment,
+  OrbitControls,
+  Center,
+  Plane,
+  AccumulativeShadows,
+  RandomizedLight,
+} from "@react-three/drei";
 
 export default function Home(props) {
   return (
-    <Canvas shadows dpr={[1, 2]} camera={{ position: [-1, 1, 2], fov: 10 }}>
-      <spotLight position={[-4, 4, -4]} angle={0.04} penumbra={1} castShadow shadow-mapSize={[2048, 2048]} />
-      <Suspense fallback={null}>
-        <Track />
-      </Suspense>
-      {/* <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.025, 0]}>
-        <planeGeometry />
-        <shadowMaterial transparent opacity={0.15} />
-      </mesh> */}
+    <Canvas shadows dpr={[1, 2]} camera={{ position: [-4, 15, 3], fov: 20 }}>
+      <Center middle>
+        <color attach="background" args={["#e0e0e0"]} />
+        <Suspense fallback={null}>
+          <Environment preset="sunset" background={false} />
+          <OrbitControls />
+          <Track position={[0, 1.1, 0]} />
+          <Plane
+            receiveShadow
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, -1, 0]}
+            args={[10, 10]}
+          >
+            <shadowMaterial transparent opacity={0.4} />
+          </Plane>
+          <AccumulativeShadows
+            temporal
+            frames={200}
+            color="purple"
+            colorBlend={0.5}
+            opacity={1}
+            scale={10}
+            alphaTest={0.85}
+          >
+            <RandomizedLight
+              amount={8}
+              radius={5}
+              ambient={0.5}
+              position={[5, 3, 2]}
+              bias={0.001}
+            />
+          </AccumulativeShadows>
+        </Suspense>
+        <OrbitControls
+          autoRotateSpeed={4}
+          enablePan={false}
+          enableZoom={false}
+          minPolarAngle={Math.PI / 2.1}
+          maxPolarAngle={Math.PI / 2.1}
+        />
+      </Center>
     </Canvas>
   );
 }
 
-function Track({ y = 2500, space = 1.8, radius = 0.1, obj = new THREE.Object3D(), ...props }) {
+function Track({ radius = 1, ...props }) {
   const ref = useRef();
-  const { context, update, data } = suspend(() => createAudio(), []);
-  
-  // Variables for decay and smoothing
+  const { update } = suspend(() => createAudio(), []);
+
   let smoothAvg = 0;
   const decayFactor = 0.97;
 
   useFrame(() => {
     let avg = update();
-
-    // Apply exponential smoothing
     smoothAvg = avg * (1 - decayFactor) + smoothAvg * decayFactor;
+    ref.current.scale.setScalar(1 + smoothAvg / 500);
 
-    obj.position.set(0, smoothAvg / y, 0);
-    obj.updateMatrix();
-    ref.current.setMatrixAt(0, obj.matrix);
-    ref.current.material.color.setHSL(smoothAvg / 360, 0.75, 0.75);
-    ref.current.instanceMatrix.needsUpdate = true;
-    console.log(ref)
+    // More vibrant color calculation
+    const hue = (smoothAvg / 255) * 360; // Full hue range
+    const saturation = 1; // Maximum saturation
+    const lightness = 0.5; // Mid-range lightness for vibrant colors
+    ref.current.material.color.setHSL(hue / 360, saturation, lightness);
   });
 
   return (
-    <instancedMesh castShadow ref={ref} args={[null, null, 1]} {...props}>
-      <sphereGeometry args={[radius, 32, 32]} />
-      <meshBasicMaterial toneMapped={false} />
-    </instancedMesh>
+    <mesh ref={ref} castShadow {...props}>
+      <sphereGeometry args={[radius, 64, 64]} />
+      <meshPhysicalMaterial
+        metalness={0.1}
+        roughness={0.3}
+        envMapIntensity={1}
+        clearcoat={2}
+        clearcoatRoughness={0.2}
+      />
+    </mesh>
   );
 }
 
@@ -66,10 +108,10 @@ async function createAudio() {
     data,
     update: () => {
       analyser.getByteFrequencyData(data);
-      return (data.avg = data.reduce((prev, cur) => prev + cur / data.length, 0));
+      return (data.avg = data.reduce(
+        (prev, cur) => prev + cur / data.length,
+        0
+      ));
     },
   };
 }
-
-
-
